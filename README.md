@@ -21,7 +21,7 @@ Contract LocalScan 是一个本地运行的合同初审工具。在浏览器里�
 
 ### 环境要求
 
-运行需要 Python 3.11 或 3.12。CI 在 macOS 上覆盖 Python 3.11 和 3.12。
+运行需要 Python 3.11 或 3.12。CI 在 Ubuntu 上跑测试套件，覆盖 Python 3.11 和 3.12。
 
 ### 安装
 
@@ -46,7 +46,7 @@ python app.py           # 或 ./run.sh
 python -m pytest tests -q          # 385 个用例
 ```
 
-CI 在 macOS 上覆盖 Python 3.11 和 3.12，跑同一套用例，并额外做一次知识库冒烟（法条总量 + BM25 有返回）。
+CI 在 Ubuntu 上跑测试套件，覆盖 Python 3.11 和 3.12，并额外做一次知识库冒烟（法条总量 + BM25 有返回）。
 
 ## 用法
 
