@@ -221,3 +221,28 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- 本项目：授权、渠道配置与本地数据（公开仓禁止提交） ---
+license.py
+config/channels/
+config/*.local.*
+*.env
+.env.*
+!.env.example
+secrets.*
+credentials.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.p12
+*.pfx
+
+# 运行产物与本地数据
+logs/
+*.log
+data/
+models/
+*.sqlite3
+*.db
+.cache/
