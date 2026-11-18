@@ -4,6 +4,10 @@
 
 Contract LocalScan 是一个在本地运行的合同初审工具。在浏览器里拖入或选择 PDF、Word、TXT 合同，它会列出命中的风险条款、条款原文、对应法条和修改建议，并导出 PDF、Word、Excel。审阅过程不需要联网。
 
+![演示动图：上传示例合同 → 命中 18 条风险 → 展开法条与建议 → 原文高亮回溯 → 导出 PDF](docs/demo-review.gif)
+
+演示动图，27 秒，循环播放：上传 `samples/软件开发服务合同.txt`，得到 18 条风险命中，展开法条依据与修改建议，回溯到原文高亮，最后导出 PDF。
+
 ![审阅结果页：左侧为本机运行状态，右侧为风险清单，每条包含条款原文、风险分析、修改建议和法条依据](docs/screenshot-review.png)
 
 上图是在 macOS 上运行本仓库代码，审阅 `samples/软件开发服务合同.txt` 的结果：18 条命中，其中高风险 2 条、中风险 8 条、低风险 8 条。
@@ -126,7 +130,7 @@ cls/
   custom.py             自定义规则包导入与校验
   config.py             路径、配置读写
 templates/ static/      前端页面
-docs/                   README 使用的三张截图
+docs/                   README 使用的演示动图与三张截图
 samples/                示例合同（TXT / PDF / DOCX 各一份）
 tests/                  385 个用例，19 个测试文件
 data/statutes*.json     法规库（statutes_extra_1..4.json 为完整法库分片）
