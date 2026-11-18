@@ -115,6 +115,9 @@ def _config_paths_under(platform: str, os_name: str) -> dict:
         f"sys.platform = {platform!r}\n"
         f"os.name = {os_name!r}\n"
         "os.environ['APPDATA'] = r'C:\\\\Users\\\\u\\\\AppData\\\\Roaming'\n"
+        # 真实的 Windows 进程一定同时带 USERPROFILE；Python 3.12 的 pathlib
+        # 在 os.name == 'nt' 时只认 USERPROFILE，缺了它 Path.home() 会直接抛错。
+        "os.environ['USERPROFILE'] = r'C:\\\\Users\\\\u'\n"
         "import importlib.util\n"
         "spec = importlib.util.spec_from_file_location('cfg', 'cls/config.py')\n"
         "m = importlib.util.module_from_spec(spec)\n"
