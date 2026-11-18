@@ -1,0 +1,302 @@
+diff --git a/app.py b/app.py
+index d36cc23..5e69016 100644
+--- a/app.py
++++ b/app.py
+@@ -249,13 +249,10 @@ if __name__ == "__main__":
+ 
+ from flask import Flask, jsonify, render_template, request, send_file
+ 
+-from cls import config, custom, extraction, license as lic, llm, netguard, parsing, reporting, risks, store
++from cls import config, custom, extraction, llm, netguard, parsing, reporting, risks, store
+ from cls.kb import KB, warmup
+ 
+ netguard.install()  # 运行期外联自检：记录并拦截任何指向本机之外的连接
+-# 兑换码走云端换授权码，只发送兑换码与本机机器码；单独登记该域名，
+-# 否则会被上面的拦截器一并挡下，导致兑换永远失败。
+-netguard.authorize_host(lic.REDEEM_URL)
+ 
+ if config.FROZEN:
+     app = Flask(__name__,
+@@ -619,41 +616,6 @@ def api_netguard():
+     return jsonify(netguard.snapshot())
+ 
+ 
+-# ---------------------------------------------------------------- 离线授权
+-# 注意：/api/license 已被「软件许可与免责协议文本」占用，授权接口统一走 /api/licensing
+-@app.get("/api/licensing")
+-def api_licensing():
+-    return jsonify(lic.state())
+-
+-
+-@app.post("/api/licensing")
+-def api_licensing_activate():
+-    payload = _json_dict()
+-    if payload is None:
+-        return jsonify({"error": "请求体必须是 JSON 对象"}), 400
+-    key = str(payload.get("key") or "").strip()
+-    if not key:
+-        return jsonify({"error": "请输入授权码或兑换码"}), 400
+-    # 兑换码（CLSX-…）走云端换绑机码，授权码（CLS-…）本地校验即可
+-    if lic.is_redeem_code(key):
+-        result = lic.redeem(key)
+-    else:
+-        result = lic.activate(key)
+-    if result["status"] != "valid":
+-        return jsonify({
+-            "error": result.get("reason") or "授权码无效",
+-            "status": result["status"],
+-            "license": lic.state(),
+-        }), 400
+-    return jsonify({"ok": True, "license": lic.state()})
+-
+-
+-@app.delete("/api/licensing")
+-def api_licensing_clear():
+-    lic.clear()
+-    return jsonify({"ok": True, "license": lic.state()})
+-
+-
+ @app.post("/api/netguard/lockdown")
+ def api_netguard_lockdown():
+     payload = _json_dict()
+@@ -706,14 +668,6 @@ def api_netguard_check():
+         else "未锁定：仅拦截非本机目标，127.0.0.1 回环正常放行。",
+     })
+ 
+-    if snap["allowed_hosts"]:
+-        items.append({
+-            "level": "ok",
+-            "label": "授权兑换放行",
+-            "detail": ("仅放行 " + "、".join(snap["allowed_hosts"])
+-                       + "，且只传兑换码与本机机器码，不包含任何合同内容。"),
+-        })
+-
+     levels = [i["level"] for i in items]
+     verdict = "alert" if "alert" in levels else ("warn" if "warn" in levels else "ok")
+     return jsonify({
+@@ -756,16 +710,6 @@ def api_review():
+             return jsonify({"error": f"{name}：超过 25 MB 限制"}), 400
+         payload.append((name, data))
+ 
+-    # 离线授权门槛：未激活不允许审阅，激活后不再有任何次数限制
+-    lic_state = lic.state()
+-    dev = lic.is_dev_mode()
+-    if not lic_state["can_review"] and not dev:
+-        return jsonify({
+-            "error": lic_state["message"],
+-            "license": lic_state,
+-            "need_license": True,
+-        }), 402
+-
+     job_id = uuid.uuid4().hex[:12]
+     with JOBS_LOCK:
+         JOBS[job_id] = {
+@@ -1001,23 +945,8 @@ def _save_export_to_disk(data: bytes, filename: str) -> tuple[bool, str, str | N
+     return True, "ok", str(path)
+ 
+ 
+-def _export_denied():
+-    """导出前的授权校验：试用结束或授权失效时返回 402，可导出时返回 None。"""
+-    st = lic.state()
+-    if st["can_export"] or lic.is_dev_mode():
+-        return None
+-    return jsonify({
+-        "error": "试用已结束或授权已失效，暂时无法导出。激活授权后可继续导出历史记录。",
+-        "license": st,
+-        "need_license": True,
+-    }), 402
+-
+-
+ @app.get("/api/reviews/<rid>/pdf")
+ def api_export_pdf(rid):
+-    denied = _export_denied()
+-    if denied:
+-        return denied
+     r = store.get_review(rid)
+     if not r:
+         return jsonify({"error": "记录不存在"}), 404
+@@ -1033,9 +962,6 @@ def api_export_pdf(rid):
+ 
+ @app.get("/api/reviews/<rid>/xlsx")
+ def api_export_xlsx(rid):
+-    denied = _export_denied()
+-    if denied:
+-        return denied
+     r = store.get_review(rid)
+     if not r:
+         return jsonify({"error": "记录不存在"}), 404
+@@ -1053,9 +979,6 @@ def api_export_xlsx(rid):
+ 
+ @app.get("/api/reviews/<rid>/docx")
+ def api_export_docx(rid):
+-    denied = _export_denied()
+-    if denied:
+-        return denied
+     r = store.get_review(rid)
+     if not r:
+         return jsonify({"error": "记录不存在"}), 404
+@@ -1523,23 +1446,16 @@ def _read_doc(name: str) -> str:
+     return _doc_cache[name]
+ 
+ 
+-@app.get("/api/license")
+-def api_license():
+-    """软件许可与免责协议（随包分发，同时在设置页可见）。"""
+-    return jsonify({"content": _read_doc("LICENSE.txt")})
+-
+-
+ @app.get("/api/manual")
+ def api_manual():
+     """随附 PDF《安装与排障》：应用打不开时也能从分发目录直接打开。"""
+     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+     for p in (base / "安装与排障.pdf",
+               base.parent / "Resources" / "安装与排障.pdf",
+-              Path(__file__).resolve().parent / "安装与排障.pdf",
+-              Path(__file__).resolve().parent / "packaging" / "安装与排障.pdf"):
++              Path(__file__).resolve().parent / "安装与排障.pdf"):
+         if p.exists():
+             return send_file(p, mimetype="application/pdf")
+-    return jsonify({"error": "随附 PDF 未找到，请重新下载完整安装包"}), 404
++    return jsonify({"error": "本地未找到《安装与排障》PDF：源码运行版不随附该文件"}), 404
+ 
+ 
+ @app.get("/api/notices")
+diff --git a/cls/config.py b/cls/config.py
+index 55bd834..8c24e17 100644
+--- a/cls/config.py
++++ b/cls/config.py
+@@ -10,7 +10,7 @@ from pathlib import Path
+ 
+ FROZEN = getattr(sys, "frozen", False)
+ 
+-# 配置读-改-写需要串行：多个请求（模型切换、阈值保存、授权变更）同时写会丢更新
++# 配置读-改-写需要串行：多个请求（模型切换、阈值保存、自定义规则导入）同时写会丢更新
+ _CONFIG_LOCK = threading.Lock()
+ 
+ if FROZEN:
+@@ -27,8 +27,8 @@ else:
+     RESOURCE_DIR = Path(__file__).resolve().parent.parent
+     DATA_DIR = RESOURCE_DIR / "data"
+ 
+-# 多实例隔离：CLS_DATA_DIR 可把配置、历史记录、授权文件指向独立目录，
+-# 便于在同一台机器上并行跑开发实例与打包实例（或两套测试环境）互不污染。
++# 多实例隔离：CLS_DATA_DIR 可把配置与历史记录指向独立目录，
++# 便于在同一台机器上并行跑多个实例（或两套测试环境）互不污染。
+ _data_override = os.environ.get("CLS_DATA_DIR", "").strip()
+ if _data_override:
+     DATA_DIR = Path(_data_override).expanduser().resolve()
+diff --git a/cls/kb.py b/cls/kb.py
+index fba310a..26ab268 100644
+--- a/cls/kb.py
++++ b/cls/kb.py
+@@ -16,7 +16,8 @@ from cls.config import RESOURCE_DIR
+ DATA_DIR = RESOURCE_DIR / "data"
+ SHARDS = [
+     DATA_DIR / "statutes.json",
+-    DATA_DIR / "statutes_extra.json",
++    # 完整法库按体积切成若干分片（每片 < 10MB），避免仓库里出现超大单文件
++    *sorted(DATA_DIR.glob("statutes_extra_*.json")),
+     DATA_DIR / "statutes_intl.json",
+     DATA_DIR / "statutes_upicc.json",
+ ]
+diff --git a/cls/netguard.py b/cls/netguard.py
+index c5ce99c..6fdf385 100644
+--- a/cls/netguard.py
++++ b/cls/netguard.py
+@@ -25,17 +25,12 @@ _EVENTS: deque = deque(maxlen=80)
+ _STATE = {
+     "attempts": 0,
+     "blocked": 0,
+-    "allowed": 0,
+     "last_target": "",
+     "installed": False,
+     "lockdown": False,
+     "locked_at": "",
+ }
+ 
+-# 授权兑换服务等「不承载合同内容」的固定主机，需要单独放行，否则兑换码
+-# 会被本模块自己拦下。只登记域名，不放行任意地址。
+-_ALLOWED_HOSTS: set[str] = set()
+-
+ _real_connect = socket.socket.connect
+ _LOOPBACK_NAMES = {"127.0.0.1", "::1", "localhost", "0.0.0.0", ""}
+ 
+@@ -76,21 +71,6 @@ def _connect(self, address):  # noqa: ANN001
+     if _is_local(address, strict):
+         return _real_connect(self, address)
+     host, port = str(address[0]), address[1] if len(address) > 1 else ""
+-    with _LOCK:
+-        allowed = host.lower() in _ALLOWED_HOSTS
+-        if allowed:
+-            _STATE["allowed"] += 1
+-            _STATE["last_target"] = f"{host}:{port}"
+-            _EVENTS.append({
+-                "time": time.strftime("%H:%M:%S"),
+-                "target": f"{host}:{port}",
+-                "origin": _origin(),
+-                "strict": strict,
+-                "allowed": True,
+-            })
+-    if allowed:
+-        # 授权兑换：只发送兑换码与本机机器码，不包含任何合同内容
+-        return _real_connect(self, address)
+     with _LOCK:
+         _STATE["attempts"] += 1
+         _STATE["blocked"] += 1
+@@ -100,7 +80,6 @@ def _connect(self, address):  # noqa: ANN001
+             "target": f"{host}:{port}",
+             "origin": _origin(),
+             "strict": strict,
+-            "allowed": False,
+         })
+     raise OSError(101, "Contract LocalScan 已拦截外部网络连接：合同数据不出本机")
+ 
+@@ -112,21 +91,6 @@ def install() -> None:
+     _STATE["installed"] = True
+ 
+ 
+-def authorize_host(url_or_host: str) -> None:
+-    """登记一个允许外联的主机（通常是授权兑换服务）。
+-
+-    只接受域名，不做通配；用于兑换码这种「不携带合同内容」的固定请求。
+-    """
+-    from urllib.parse import urlsplit
+-
+-    raw = (url_or_host or "").strip()
+-    host = (urlsplit(raw).hostname or raw).lower()
+-    if not host:
+-        return
+-    with _LOCK:
+-        _ALLOWED_HOSTS.add(host)
+-
+-
+ def set_lockdown(on: bool) -> dict:
+     with _LOCK:
+         _STATE["lockdown"] = bool(on)
+@@ -139,7 +103,6 @@ def clear_events() -> dict:
+         _EVENTS.clear()
+         _STATE["attempts"] = 0
+         _STATE["blocked"] = 0
+-        _STATE["allowed"] = 0
+         _STATE["last_target"] = ""
+     return snapshot()
+ 
+@@ -151,8 +114,6 @@ def snapshot(limit: int = 20) -> dict:
+             "active": _STATE["installed"],
+             "attempts": _STATE["attempts"],
+             "blocked": _STATE["blocked"],
+-            "allowed": _STATE["allowed"],
+-            "allowed_hosts": sorted(_ALLOWED_HOSTS),
+             "last_target": _STATE["last_target"],
+             "lockdown": _STATE["lockdown"],
+             "locked_at": _STATE["locked_at"],
+diff --git a/cls/risks.py b/cls/risks.py
+index d757fb6..51a712c 100644
+--- a/cls/risks.py
++++ b/cls/risks.py
+@@ -1,4 +1,4 @@
+-"""规则引擎：30 条合同风险规则，分级、评分并附本地法条依据。"""
++"""规则引擎：内置合同风险规则，分级、评分并附本地法条依据。"""
+ from __future__ import annotations
+ 
+ import re

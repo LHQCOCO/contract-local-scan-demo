@@ -1,0 +1,44 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    name: pytest (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Run test suite
+        run: python -m pytest tests -q
+
+      - name: Smoke test knowledge base
+        run: |
+          python - <<'PY'
+          from cls.kb import KnowledgeBase
+          kb = KnowledgeBase()
+          assert len(kb.laws) >= 1000, len(kb.laws)
+          assert len(kb.articles) >= 60000, len(kb.articles)
+          hits = kb.search("逾期付款 违约金", top_k=5)
+          assert hits, "BM25 检索无结果"
+          print("laws:", len(kb.laws), "articles:", len(kb.articles), "hits:", len(hits))
+          PY

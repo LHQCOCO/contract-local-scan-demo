@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contract LocalScan · 启动中</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+    background: radial-gradient(ellipse at top, #1a2332 0%, #0d1320 60%, #080c14 100%);
+    color: #e8eef7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .splash {
+    text-align: center;
+    max-width: 440px;
+    padding: 40px;
+    animation: fadeIn 0.5s ease;
+  }
+  .shield {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 28px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 40px rgba(59, 130, 246, 0.35);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .shield svg { width: 38px; height: 38px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+  h1 em { font-style: normal; color: #60a5fa; }
+  .sub {
+    font-size: 14px;
+    color: #8da2c0;
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+  .spinner {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 20px;
+    border: 3px solid rgba(96, 165, 250, 0.18);
+    border-top-color: #60a5fa;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  .status {
+    font-size: 13px;
+    color: #6b7fa0;
+    min-height: 20px;
+    transition: opacity 0.3s;
+  }
+  .addr {
+    margin-top: 14px;
+    font-size: 11px;
+    color: #4a5a78;
+    line-height: 1.7;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  .addr em { font-style: normal; color: #60a5fa; }
+  .addr-note {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #8da2c0;
+    line-height: 1.7;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .privacy-note {
+    margin-top: 36px;
+    font-size: 11px;
+    color: #4a5a78;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .privacy-note .dot { width: 6px; height: 6px; border-radius: 50%; background: #34d399; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 12px 40px rgba(59, 130, 246, 0.35); }
+    50% { box-shadow: 0 12px 56px rgba(59, 130, 246, 0.55); }
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+  <div class="splash">
+    <div class="shield">
+      <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5.4c0 4.3-2.9 7.8-7 9.6-4.1-1.8-7-5.3-7-9.6V6l7-3z"/><path d="M8.6 12.2l2.2 2.2 4.4-4.6"/></svg>
+    </div>
+    <h1>Contract <em>LocalScan</em></h1>
+    <p class="sub">正在加载本地法规知识库与风险规则引擎<br>所有处理均在本机完成，合同不会上传</p>
+    <div class="spinner"></div>
+    <div class="status" id="status">初始化中…</div>
+    <div class="addr" id="addr"></div>
+    <div class="privacy-note"><span class="dot"></span>数据不出本机</div>
+  </div>
+<script>
+  var steps = ["初始化中…", "加载法规知识库…", "编译风险规则…", "就绪，正在打开…"];
+  var si = 0;
+  var statusEl = document.getElementById("status");
+
+  // 显示本次实际访问地址。8765 被其他程序占用时，应用会自动改用相邻端口，
+  // 此处明确告知，避免用户按固定端口手动访问而打不开。
+  (function showAddr() {
+    var el = document.getElementById("addr");
+    if (!el) return;
+    var host = location.host;
+    if (location.port && location.port !== "8765") {
+      el.innerHTML = "访问地址 <em>" + host + "</em>" +
+        "<div class=\"addr-note\">8765 端口已被其他程序占用，本次已自动改用当前端口。请保持此地址访问，无需手动修改。</div>";
+    } else {
+      el.innerHTML = "访问地址 <em>" + host + "</em>";
+    }
+  })();
+  var tick = setInterval(function() {
+    si = Math.min(si + 1, steps.length - 2);
+    statusEl.textContent = steps[si];
+  }, 2600);
+
+  function check() {
+    // 启动页与工作台由同一个服务、同一个端口返回，直接轮询相对路径即可，
+    // 无需猜测端口：无论服务最终绑定 8765 还是其他端口，请求都指向它自己。
+    fetch("/api/ping", { cache: "no-store" })
+      .then(function(r) {
+        if (r.ok) {
+          return r.json().then(function(j) {
+            if (j && j.ready) {
+              clearInterval(tick);
+              statusEl.textContent = steps[steps.length - 1];
+              setTimeout(function() { window.location.reload(); }, 250);
+            } else {
+              setTimeout(check, 450);
+            }
+          }).catch(function() { setTimeout(check, 450); });
+        } else {
+          setTimeout(check, 450);
+        }
+      })
+      .catch(function() { setTimeout(check, 450); });
+  }
+  setTimeout(check, 300);
+</script>
+</body>
+</html>

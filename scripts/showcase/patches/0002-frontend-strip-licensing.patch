@@ -1,0 +1,425 @@
+diff --git a/static/app.css b/static/app.css
+index 9ac86c7..772e382 100644
+--- a/static/app.css
++++ b/static/app.css
+@@ -86,46 +86,6 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke
+ }
+ .icon-btn:hover{color:var(--gold-2);border-color:rgba(200,166,107,.4)}
+ 
+-/* 离线授权胶囊：未激活为暖金、已激活为墨绿、失效为砖红 */
+-.pill.license{background:rgba(200,166,107,.10);border:1px solid rgba(200,166,107,.30);color:#E4D2AE;transition:.2s}
+-.pill.license:hover{background:rgba(200,166,107,.18);border-color:rgba(200,166,107,.5)}
+-.pill.license i{width:6px;height:6px;border-radius:50%;background:#C8A66B}
+-.pill.license.valid{background:rgba(76,107,84,.16);border-color:rgba(126,164,133,.35);color:#CBDCCB}
+-.pill.license.valid i{background:#79A882;box-shadow:0 0 0 4px rgba(121,168,130,.15)}
+-.pill.license.invalid{background:rgba(176,86,58,.14);border-color:rgba(200,120,90,.34);color:#E7BFB0}
+-.pill.license.invalid i{background:#B0713A}
+-
+-/* 授权弹窗 */
+-.license-card{max-width:520px}
+-.license-state{
+-  display:flex;align-items:baseline;gap:10px;padding:12px 14px;border-radius:10px;
+-  background:rgba(200,166,107,.08);border:1px solid rgba(200,166,107,.22);margin-bottom:18px
+-}
+-.license-state b{font-size:15px;color:#5C4A2E}
+-.license-state span{font-size:12.5px;color:#8A7A63}
+-.license-state.valid{background:rgba(76,107,84,.09);border-color:rgba(126,164,133,.3)}
+-.license-state.valid b{color:#3F6B4A}
+-.license-state.valid span{color:#6E8A74}
+-.license-state.invalid{background:rgba(176,86,58,.08);border-color:rgba(200,120,90,.28)}
+-.license-state.invalid b{color:#9C4A2E}
+-.license-state.invalid span{color:#9A6C58}
+-.license-field{margin-bottom:16px}
+-.license-field label{display:block;font-size:12.5px;font-weight:600;color:#6B6252;margin-bottom:6px}
+-.license-copy{display:flex;align-items:center;gap:8px}
+-.license-copy code{
+-  flex:1;padding:9px 12px;border-radius:8px;background:rgba(28,26,23,.05);
+-  border:1px solid var(--line);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+-  font-size:13px;letter-spacing:.06em;color:#4A4438
+-}
+-.license-field textarea{
+-  width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);
+-  background:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+-  font-size:12.5px;line-height:1.6;resize:vertical;color:#3E3A32
+-}
+-.license-field textarea:focus{outline:none;border-color:rgba(200,166,107,.6);box-shadow:0 0 0 3px rgba(200,166,107,.12)}
+-.license-note{margin:6px 0 0;font-size:11.5px;color:#95897A}
+-.license-err{margin:8px 0 0;font-size:12px;color:#A5472A}
+-
+ /* ---------- sidebar ---------- */
+ .sidebar{
+   position:fixed;top:68px;left:0;bottom:0;width:236px;z-index:50;
+diff --git a/static/app.js b/static/app.js
+index a690f71..15aa964 100644
+--- a/static/app.js
++++ b/static/app.js
+@@ -44,7 +44,6 @@
+     custom: { packs: [], stats: null, overrides: {} },
+     customFile: null,
+     preview: null,
+-    license: null,
+   };
+ 
+   /* ---------- toast ---------- */
+@@ -413,15 +412,6 @@
+       const r = await fetch('/api/review', { method: 'POST', body: fd });
+       const data = await r.json();
+       if (!r.ok) {
+-        // 402 = 未激活或授权失效：直接引导到激活弹窗，而不是只弹一条错误
+-        if (r.status === 402) {
+-          if (data.license) {
+-            state.license = data.license;
+-            renderLicensePill();
+-            renderLicenseDialog();
+-          }
+-          openLicenseDialog();
+-        }
+         throw new Error(data.error || '提交失败');
+       }
+       state.job = { id: data.job_id, progress: state.files.map((f) => ({ filename: f.name, state: 'pending', step: '等待本地处理' })), state: 'queued', results: [] };
+@@ -2035,13 +2025,11 @@
+     const pDel = e.target.closest('[data-pack-del]');
+     if (pDel) { deletePack(pDel.dataset.packDel, pDel.dataset.name || ''); return; }
+ 
+-    const docBtn = e.target.closest('#btnViewLicense, #btnViewNotices');
++    const docBtn = e.target.closest('#btnViewNotices');
+     if (docBtn) {
+-      const isLicense = docBtn.id === 'btnViewLicense';
+-      const title = isLicense ? '软件许可与免责协议' : '第三方组件与数据来源声明';
+       try {
+-        const r = await fetch(isLicense ? '/api/license' : '/api/notices').then((x) => x.json());
+-        $('#docModalTitle').textContent = title;
++        const r = await fetch('/api/notices').then((x) => x.json());
++        $('#docModalTitle').textContent = '第三方组件与数据来源声明';
+         $('#docModalText').textContent = r.content || '文件缺失';
+         $('#docModal').classList.add('open');
+       } catch {
+@@ -2258,7 +2246,6 @@
+   document.addEventListener('keydown', (e) => {
+     if (e.key === 'Escape') {
+       closeModal();
+-      closeLicenseDialog();
+       $('#docModal').classList.remove('open');
+       $('#customImportModal').classList.remove('open');
+       if ($('#customPreviewModal').classList.contains('open')) {
+@@ -2284,192 +2271,19 @@
+     if (t) togglePack(t.dataset.packToggle, t.checked);
+   });
+ 
+-  /* ---------- 离线授权 ---------- */
+-  async function loadLicense() {
+-    try {
+-      const r = await fetch('/api/licensing');
+-      state.license = await r.json();
+-    } catch (_) {
+-      state.license = null;
+-    }
+-    renderLicensePill();
+-    renderLicenseDialog();
+-  }
+-
+-  const INVALID_STATUS = ['wrong_machine', 'tampered'];
+-
+-  function renderLicensePill() {
+-    const pill = $('#licensePill');
+-    const text = $('#licensePillText');
+-    if (!pill || !text) return;
+-    const L = state.license || {};
+-    pill.classList.toggle('valid', L.status === 'valid');
+-    pill.classList.toggle('invalid', INVALID_STATUS.includes(L.status));
+-    if (L.status === 'valid') {
+-      text.textContent = L.edition_name || '已授权';
+-    } else if (L.status === 'missing') {
+-      text.textContent = '未激活';
+-    } else if (L.status === 'wrong_machine') {
+-      text.textContent = '设备不符';
+-    } else if (L.status === 'tampered') {
+-      text.textContent = '授权异常';
+-    } else {
+-      text.textContent = '未激活';
+-    }
+-  }
+-
+-  function renderLicenseDialog() {
+-    const row = $('#licenseStateRow');
+-    if (!row) return;
+-    const L = state.license || {};
+-    row.classList.toggle('valid', L.status === 'valid');
+-    row.classList.toggle('invalid', INVALID_STATUS.includes(L.status));
+-
+-    const t = $('#licenseStateText');
+-    const h = $('#licenseStateHint');
+-    if (L.status === 'valid') {
+-      // 买断制 + 免费更新：不展示任何到期或续费信息
+-      t.textContent = `${L.edition_name || '已授权'} · 永久使用`;
+-      h.textContent = [L.expires_display || '含免费更新', `机器码 ${L.machine_id}`].filter(Boolean).join(' · ');
+-    } else if (L.status === 'missing') {
+-      t.textContent = '未激活';
+-      h.textContent = '粘贴购买后获得的授权码，激活后即可无限次审阅';
+-    } else if (L.status === 'wrong_machine') {
+-      t.textContent = '设备不匹配';
+-      h.textContent = L.message || '';
+-    } else {
+-      t.textContent = '授权无效';
+-      h.textContent = L.message || '';
+-    }
+-    const mEl = $('#licenseMachine');
+-    if (mEl) mEl.textContent = L.machine_id || '—';
+-    const clearBtn = $('#btnLicenseClear');
+-    if (clearBtn) clearBtn.hidden = !L.licensed;
+-    // 未激活时关闭只是收起弹窗，实际审阅仍需要授权码
+-    const closeBtn = $('#btnLicenseClose');
+-    if (closeBtn) closeBtn.textContent = L.licensed ? '关闭' : '稍后激活';
+-  }
+-
+-  function openLicenseDialog() {
+-    renderLicenseDialog();
+-    const err = $('#licenseErr');
+-    if (err) err.hidden = true;
+-    const mask = $('#licenseMask');
+-    if (mask) mask.hidden = false;
+-    // 已激活时没有可填的内容，焦点落在「关闭」；未激活时直接聚焦授权码输入框
+-    if (state.license?.licensed) $('#btnLicenseClose')?.focus();
+-    else $('#licenseInput')?.focus();
+-  }
+-
+-  function closeLicenseDialog() {
+-    const mask = $('#licenseMask');
+-    if (!mask || mask.hidden) return;
+-    mask.hidden = true;
+-    $('#licensePill')?.focus();
+-    // 首启流程：激活窗关闭（激活成功或选择稍后激活）后再开始新手指引
+-    if (tourPending) {
+-      tourPending = false;
+-      setTimeout(() => window.ClsTour?.start(), 400);
+-    }
+-  }
+-
+-  /* ---------- 首启顺序：部署授权 → 激活 → 新手指引 ---------- */
+-  const ACT_PROMPT_KEY = 'cls_activation_prompted';
+-  let tourPending = false;
+-
++  /* ---------- 首启：新手指引 ---------- */
+   function firstRunFlow() {
+-    let prompted = false;
+-    try { prompted = !!localStorage.getItem(ACT_PROMPT_KEY); } catch (_) { /* ignore */ }
+-    // 未激活且从未提示过：先弹激活窗（可点「稍后激活」跳过），关窗后再进指引
+-    if (state.license?.status !== 'valid' && !prompted) {
+-      try { localStorage.setItem(ACT_PROMPT_KEY, '1'); } catch (_) { /* ignore */ }
+-      tourPending = !!(window.ClsTour && window.ClsTour.shouldAutoStart());
+-      openLicenseDialog();
+-      return;
+-    }
+     if (window.ClsTour && window.ClsTour.shouldAutoStart()) {
+       setTimeout(() => window.ClsTour.start(), 400);
+     }
+   }
+ 
+-  async function activateLicense() {
+-    const input = $('#licenseInput');
+-    const err = $('#licenseErr');
+-    const btn = $('#btnLicenseActivate');
+-    const key = (input?.value || '').trim();
+-    if (!key) {
+-      if (err) { err.textContent = '请粘贴授权码或兑换码'; err.hidden = false; }
+-      return;
+-    }
+-    const isRedeem = /^CLSX-/i.test(key);
+-    const oldLabel = btn.textContent;
+-    btn.disabled = true;
+-    btn.textContent = isRedeem ? '兑换中…' : '校验中…';
+-    try {
+-      const r = await fetch('/api/licensing', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ key }),
+-      });
+-      const d = await r.json();
+-      if (!r.ok) {
+-        if (err) { err.textContent = d.error || (isRedeem ? '兑换失败' : '授权码无效'); err.hidden = false; }
+-        if (d.license) { state.license = d.license; renderLicensePill(); renderLicenseDialog(); }
+-        return;
+-      }
+-      state.license = d.license;
+-      renderLicensePill();
+-      renderLicenseDialog();
+-      if (input) input.value = '';
+-      if (err) err.hidden = true;
+-      toast(isRedeem ? '兑换成功，已激活' : '授权已激活', 'ok');
+-      setTimeout(closeLicenseDialog, 900);
+-    } catch (_) {
+-      if (err) { err.textContent = '激活失败，请稍后重试'; err.hidden = false; }
+-    } finally {
+-      btn.disabled = false;
+-      btn.textContent = oldLabel;
+-    }
+-  }
+-
+-  async function clearLicense() {
+-    if (!window.confirm('移除后本机将回到未激活状态，确定继续？')) return;
+-    try {
+-      const r = await fetch('/api/licensing', { method: 'DELETE' });
+-      const d = await r.json();
+-      state.license = d.license;
+-      renderLicensePill();
+-      renderLicenseDialog();
+-      toast('已移除本机授权', 'ok');
+-    } catch (_) {
+-      toast('操作失败', 'error');
+-    }
+-  }
+-
+-  // 授权入口
+-  $('#licensePill')?.addEventListener('click', openLicenseDialog);
+-  $('#btnLicenseClose')?.addEventListener('click', closeLicenseDialog);
+-  $('#btnLicenseActivate')?.addEventListener('click', activateLicense);
+-  $('#btnLicenseClear')?.addEventListener('click', clearLicense);
+-  $('#licenseMask')?.addEventListener('click', (e) => {
+-    if (e.target === e.currentTarget) closeLicenseDialog();
+-  });
+-  $('#btnCopyMachine')?.addEventListener('click', async () => {
+-    const v = ($('#licenseMachine')?.textContent || '').trim();
+-    if (!v || v === '—') return;
+-    try {
+-      await navigator.clipboard.writeText(v);
+-      toast('机器码已复制', 'ok');
+-    } catch (_) {
+-      toast('复制失败，请手动选择复制', 'error');
+-    }
+-  });
+ 
+   /* ---------- init ---------- */
+   (async function init() {
+     renderFiles();
+     bindExports();
+-    await Promise.all([loadStatus(), loadSamples(), loadHistory(), loadConsent(), loadLicense()]);
++    await Promise.all([loadStatus(), loadSamples(), loadHistory(), loadConsent()]);
+     // 本地部署会读取本机内存并下载模型：首次启动必须先获得用户授权
+     if (state.consent?.deploy_consent === null) {
+       $('#consentMask').hidden = false;
+diff --git a/static/tour.js b/static/tour.js
+index e7d5fb4..bfafce9 100644
+--- a/static/tour.js
++++ b/static/tour.js
+@@ -9,12 +9,7 @@
+     {
+       center: true,
+       title: '欢迎使用 Contract LocalScan',
+-      body: '这是一份约 2 分钟的分步指引，会带你走遍工具的每个关键区域——包括 <b>激活授权</b>、<b>自定义规则</b>，以及「系统与隐私」里各项设置的作用和影响。<br>软件为一次性买断，后续版本与规则库更新<b>全部免费</b>。中途想停下时，点卡片上的「取消」或按 <b>ESC</b> 即可；点击指引外的其他区域<b>不会</b>中断指引。'
+-    },
+-    {
+-      view: 'workspace', target: '#licensePill', pos: 'left',
+-      title: '激活授权 · 买断后永久使用',
+-      body: '顶部状态栏这个胶囊显示当前授权状态。购买后你会收到一个授权码（<b>CLS-PU-…</b>），点开胶囊粘贴进去、点「激活」即可，激活后<b>不限份数、不限次数</b>。<b>全程在本机离线校验</b>，不需要联网，合同内容也不会上传。'
++      body: '这是一份约 2 分钟的分步指引，会带你走遍工具的每个关键区域——包括<b>自定义规则</b>，以及「系统与隐私」里各项设置的作用和影响。中途想停下时，点卡片上的「取消」或按 <b>ESC</b> 即可；点击指引外的其他区域<b>不会</b>中断指引。'
+     },
+     {
+       view: 'workspace', target: '.upload-panel', pos: 'right',
+@@ -89,12 +84,12 @@
+     {
+       view: 'settings', target: '#view-settings .danger-zone', pos: 'top',
+       title: '清空全部本地记录 · 不可恢复',
+-      body: '<span class="warn">不可恢复。</span>一键删除本机 SQLite 中的全部审阅历史与缓存。适用场景：定期清理敏感合同、转让电脑前。执行前请确认重要报告已导出。<br>它只清审阅记录，保留授权与配置。'
++      body: '<span class="warn">不可恢复。</span>一键删除本机 SQLite 中的全部审阅历史与缓存。适用场景：定期清理敏感合同、转让电脑前。执行前请确认重要报告已导出。<br>它只清审阅记录，保留配置。'
+     },
+     {
+       view: 'docs', tab: '[data-doctab="uninstall"]', target: '.uninstall-zone', pos: 'top',
+       title: '一键卸载与清理 · 换机或彻底停用',
+-      body: '<span class="warn">不可恢复。</span>自动删除应用数据目录、导出目录，并在退出后移除应用本体。审阅记录、报告与配置<b>将全部清除</b>。<br>适用场景：换新电脑、转让旧机、彻底停用。只想清理审阅历史、保留授权与配置时，请用上一步的「清空全部本地记录」。'
++      body: '<span class="warn">不可恢复。</span>自动删除应用数据目录、导出目录，并在退出后移除应用本体。审阅记录、报告与配置<b>将全部清除</b>。<br>适用场景：换新电脑、转让旧机、彻底停用。只想清理审阅历史、保留配置时，请用上一步的「清空全部本地记录」。'
+     },
+     {
+       center: true,
+@@ -242,7 +237,7 @@
+ 
+   window.ClsTour = { start, shouldAutoStart };
+ 
+-  // 首次进入是否自动展示：只读取状态，何时展示由 app.js 按「部署授权 → 激活 → 指引」的顺序决定
++  // 首次进入是否自动展示：只读取状态，何时展示由 app.js 的 firstRunFlow 决定
+   function shouldAutoStart() {
+     try { return !localStorage.getItem(LS_KEY); } catch (_) { return false; }
+   }
+diff --git a/templates/index.html b/templates/index.html
+index ba82e3d..79d30f7 100644
+--- a/templates/index.html
++++ b/templates/index.html
+@@ -46,9 +46,6 @@
+       <span class="dot"></span><span id="modelPillText">检测本地模型</span>
+       <i class="pill-bar" id="modelPillBar" hidden><b id="modelPillFill"></b></i>
+     </button>
+-    <button class="pill license" id="licensePill" type="button" title="离线授权状态，点击查看或激活">
+-      <i></i><span id="licensePillText">未激活</span>
+-    </button>
+     <button class="icon-btn" id="btnAbout" title="关于与隐私">
+       <svg><use href="#i-shield"/></svg>
+     </button>
+@@ -852,19 +849,10 @@
+     <div class="settings-section">
+       <div class="settings-section-head">
+         <span class="settings-section-kicker">GROUP 03 · 协议与声明</span>
+-        <h2>许可与来源</h2>
+-        <p>软件许可协议、开源组件与法规数据来源声明，均随安装包分发。</p>
++        <h2>数据来源</h2>
++        <p>开源组件与法规数据的来源声明随安装包分发。</p>
+       </div>
+       <div class="settings-grid">
+-        <section class="panel setting-card">
+-          <div class="panel-head slim">
+-            <h3>软件许可与免责协议</h3><span class="badge-soft">单机许可</span>
+-          </div>
+-          <p class="muted">授权范围、数据处理说明、服务性质与免责条款。审阅结果仅供参考，不构成法律意见。</p>
+-          <div class="field-actions">
+-            <button class="btn ghost sm" id="btnViewLicense"><svg><use href="#i-doc"/></svg>查看协议</button>
+-          </div>
+-        </section>
+         <section class="panel setting-card">
+           <div class="panel-head slim">
+             <h3>第三方组件与数据来源</h3><span class="badge-soft">声明</span>
+@@ -1020,47 +1008,6 @@
+   </div>
+ </div>
+ 
+-<!-- 离线授权：激活与状态查看 -->
+-<div class="consent-mask" id="licenseMask" hidden>
+-  <div class="consent-card license-card" role="dialog" aria-modal="true" aria-labelledby="licenseTitle">
+-    <div class="consent-head">
+-      <span class="consent-ico"><svg><use href="#i-shield"/></svg></span>
+-      <div>
+-        <h2 id="licenseTitle">离线授权</h2>
+-        <p id="licenseSubtitle">一次买断，永久使用，含后续免费更新；授权信息仅保存在本机，合同内容始终不外传。</p>
+-      </div>
+-    </div>
+-    <div class="consent-body">
+-      <div class="license-state" id="licenseStateRow">
+-        <b id="licenseStateText">未激活</b>
+-        <span id="licenseStateHint">粘贴授权码激活后即可无限次审阅</span>
+-      </div>
+-
+-      <div class="license-field">
+-        <label for="licenseMachine">本机机器码</label>
+-        <div class="license-copy">
+-          <code id="licenseMachine">—</code>
+-          <button class="btn ghost sm" id="btnCopyMachine" type="button">复制</button>
+-        </div>
+-        <p class="license-note">日常授权码不绑定机器码，激活和换机都无需提供；仅售后补发绑机码或使用兑换码时才可能用到。</p>
+-      </div>
+-
+-      <div class="license-field">
+-        <label for="licenseInput">授权码</label>
+-        <textarea id="licenseInput" rows="2" spellcheck="false"
+-                  placeholder="粘贴你购买的授权码，形如 CLS-PU-A1B2C3D4-9F8E7D6C5B"></textarea>
+-        <p class="license-note">粘贴后点「激活」即可，全程在本机离线校验，<b>不联网</b>。若你拿到的是兑换码（CLSX-…），同样粘贴在这里，会自动联网兑换一次。</p>
+-        <p class="license-err" id="licenseErr" hidden></p>
+-      </div>
+-    </div>
+-    <div class="consent-actions">
+-      <button class="btn ghost" id="btnLicenseClear" type="button" hidden>移除本机授权</button>
+-      <button class="btn ghost" id="btnLicenseClose" type="button">关闭</button>
+-      <button class="btn primary" id="btnLicenseActivate" type="button">激活</button>
+-    </div>
+-  </div>
+-</div>
+-
+ <!-- 一键卸载完成提示 -->
+ <div class="uninstall-done" id="uninstallDone" hidden>
+   <div class="uninstall-done-card">

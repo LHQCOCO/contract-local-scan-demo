@@ -1,0 +1,39 @@
+diff --git a/THIRD_PARTY_NOTICES.md b/THIRD_PARTY_NOTICES.md
+index 5f609bb..fec4dd9 100644
+--- a/THIRD_PARTY_NOTICES.md
++++ b/THIRD_PARTY_NOTICES.md
+@@ -16,12 +16,11 @@ Contract LocalScan 在开发中使用了以下开源组件与公开数据，感
+ | waitress | MIT（类 BSD） | 生产级 WSGI 服务器 |
+ | pypdfium2 | Apache-2.0 / BSD-3 | PDF 页面渲染（OCR 前置） |
+ | rapidocr_onnxruntime | Apache-2.0 | 本地中文 OCR（含 onnxruntime，MIT；PP-OCR 系列模型，Apache-2.0） |
+-| PyInstaller | GPL with special exception | 打包构建工具（仅构建期使用，运行时不包含其代码，特殊例外允许以此方式分发） |
+ 
+ ## 二、法规数据来源
+ 
+-1. **中国法律文本**（民法典、刑法、公司法等 57 部）
+-   - 来源：LawRefBook/Laws 社区整理的全国人大公布文本（github.com/LawRefBook/Laws）
++1. **中国法律文本**（民法典、刑法、公司法等 1,468 部）
++   - 来源：LawRefBook/Laws 社区整理的全国人大公布文本（github.com/LawRefBook/Laws），以及全国人大法律法规数据库（flk.npc.gov.cn）公开文本
+    - 版权状态：依《著作权法》第五条，法律、法规官方文本不适用著作权保护
+ 2. **CISG《联合国国际货物销售合同公约》**
+    - 来源：UNCITRAL 官方英文文本；版权归联合国所有，此处复制仅作检索参考
+diff --git a/tests/conftest.py b/tests/conftest.py
+index c4d8f16..256cf4c 100644
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -11,15 +11,6 @@ if str(ROOT) not in sys.path:
+     sys.path.insert(0, str(ROOT))
+ 
+ 
+-@pytest.fixture(autouse=True)
+-def _dev_license(monkeypatch):
+-    """测试环境默认跳过离线授权的审阅限制。
+-
+-    api_review 会按试用额度拦截请求，历史用例反复提交审阅会耗尽额度；
+-    置 CLS_DEV=1 让 is_dev_mode() 生效。需要验证门槛本身的用例自行删除该变量。
+-    """
+-    monkeypatch.setenv("CLS_DEV", "1")
+-
+ CONTRACT_TEXT = "\n".join([
+     "软件开发服务合同",
+     "甲方：星海科技有限公司",
