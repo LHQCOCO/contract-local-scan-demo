@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 from cls.kb import KB
-from cls.revisions import REVISIONS
 from cls.risks import RULES, evaluate
 
 LOAN_BAD = """
@@ -131,11 +130,11 @@ def test_each_match_rule_fires(rid, text):
 
 # ---------- 结构与法条 ----------
 
-def test_new_rules_have_revisions_and_valid_basis():
+def test_new_rules_have_valid_basis():
     for rid in sorted(J_NEW | G_NEW):
-        assert rid in REVISIONS, f"{rid} 缺少修订草案"
         rule = next(r for r in RULES if r["id"] == rid)
-        for bid in rule.get("basis", []):
+        assert rule.get("basis"), f"{rid} 缺少法条依据"
+        for bid in rule["basis"]:
             assert bid in KB.by_id, f"{rid} 引用的法条 {bid} 不在知识库"
 
 

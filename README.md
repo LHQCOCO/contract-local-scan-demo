@@ -48,13 +48,13 @@ pip install pytest
 python -m pytest tests -q
 ```
 
-当前为 385 个用例；CI 在 Python 3.11 和 3.12 上运行同一套用例，并额外做一次知识库冒烟检查（法条总量与 BM25 是否有返回）。
+当前为 501 个用例；CI 在 Python 3.11 和 3.12 上运行同一套用例，并额外做一次知识库冒烟检查（法条总量与 BM25 是否有返回）。
 
 ## 用法
 
 1. 打开页面，拖入或选择合同文件。
 2. 等待解析、字段抽取、规则匹配和法条检索完成，页面进入结果页。
-3. 结果页左侧显示本机运行状态，包括法库条数、规则条数和监听地址；右侧按等级列出命中，每条包含条款原文、风险分析、修改建议和法条依据。
+3. 结果页左侧显示本机运行状态，包括法库条数、规则条数和监听地址；右侧按等级列出命中，每条包含条款原文、风险分析、修改建议、修订要点（条文原文与出处）和法条依据。
 4. 在结果页导出 PDF、DOCX 或 XLSX。
 
 以 `samples/软件开发服务合同.txt` 为例，上传后应得到 18 条命中（高 2、中 8、低 8），并至少包含以下四类问题：
@@ -66,7 +66,7 @@ python -m pytest tests -q
 
 ![导出的 PDF 报告：审阅结论、关键字段及来源、分等级风险清单与法条原文](docs/screenshot-export-pdf.png)
 
-示例合同导出的 PDF 共 8 页，包含审阅结论、关键字段（每格标注来源）、风险清单与法条原文。同一份结果可以导出为带 16 条 Word 原生批注的 DOCX，以及 Excel 清单。
+示例合同导出的 PDF 共 11 页，包含审阅结论、关键字段（每格标注来源）、风险清单与法条原文。同一份结果可以导出为带 16 条 Word 原生批注的 DOCX，以及 Excel 清单。三份导出件在 [docs/exports](docs/exports)：[PDF](docs/exports/sample-review.pdf)、[DOCX](docs/exports/sample-comments.docx)、[XLSX](docs/exports/sample-fields.xlsx)。
 
 ![外联监测面板：列出运行期拦下的非回环连接，支持一键断联](docs/screenshot-offline.png)
 
@@ -121,7 +121,7 @@ cls/
   ocr.py                扫描件 PDF 的本地 OCR（单份最多 30 页）
   extraction.py         关键字段抽取、合同类型判定
   risks.py              规则引擎（191 条内置规则 + 自定义规则）
-  revisions.py          条款修订草案索引（当前为占位结构）
+  revisions.py          修订要点：按规则命中的法条拼条文原文与出处
   kb.py                 BM25 检索、法域路由、查询扩展
   llm.py                本机 Ollama 可选能力
   netguard.py           运行期外联拦截
@@ -130,9 +130,9 @@ cls/
   custom.py             自定义规则包导入与校验
   config.py             路径、配置读写
 templates/ static/      前端页面
-docs/                   README 使用的演示动图与三张截图
+docs/                   README 使用的演示动图、三张截图与样例导出件（exports/）
 samples/                示例合同（TXT / PDF / DOCX 各一份）
-tests/                  385 个用例，19 个测试文件
+tests/                  501 个用例，32 个测试文件
 data/statutes*.json     法规库（statutes_extra_1..4.json 为完整法库分片）
 data/sources/           构建法规库用的原文（民法典、刑法等）与国际条约 PDF
 scripts/
@@ -154,7 +154,7 @@ THIRD_PARTY_NOTICES.md  第三方组件与法条文本声明
 - 这是初筛，不是法律意见。规则召回偏向「明确不利」或「明确缺失」的条款，对需要结合交易背景判断的条款没有覆盖。
 - 规则是枚举式的。191 条规则覆盖 26 个类别，长尾合同（如涉外工程、衍生品）覆盖有限，缺失类别需要新增规则。
 - `absence` 模式有取舍。marker 命中率 40% 的阈值在合同只截取部分章节时会偏保守，宁可漏报也不误报。
-- 条款修订建议为占位文本。`cls/revisions.py` 只保留接口与索引结构，逐条修订草案尚未撰写，界面显示模板文案。
+- 修订要点是条文原文，不是改好的条款。`cls/revisions.py` 按规则命中的 `basis` 拼出条文原文与出处，界面和导出件都标注「需法务复核」；工具不生成可直接替换的合同文本。
 - OCR 只处理 PDF。图片型 DOCX 不支持；单份 PDF 最多识别 30 页，超出部分不识别，需要拆分后分别上传；识别质量取决于扫描清晰度。
 - 单机单用户。没有账号体系，服务绑定 `127.0.0.1`，数据存在本机，不支持多人并发协作。
 - 依赖版本未锁定。`requirements.txt` 使用 `>=` 下限，不同时间安装可能得到不同版本。
@@ -170,13 +170,13 @@ THIRD_PARTY_NOTICES.md  第三方组件与法条文本声明
 | 规则类别 | 26 个 | 同一命令，对 `RULES` 的 `category` 去重计数 | 规则自身的类别字段，不等同于合同类型数 |
 | 法规 | 1,480 部 | 7 个 `data/statutes*.json` 中 `laws` 数量之和 | 含国内法规、国际条约与示范法 |
 | 法条 | 63,653 条 | 同一批文件中 `total` 字段之和 | 随仓库分发的法库快照 |
-| 自动化用例 | 385 个 | `python -m pytest tests --collect-only -q` | 当前 `tests/` 目录的收集结果 |
+| 自动化用例 | 501 个 | `python -m pytest tests --collect-only -q` | 当前 `tests/` 目录的收集结果 |
 | 单份大小上限 | 25 MB | `cls/parsing.py` 中的 `MAX_BYTES` | 解析层限制 |
 | 单次文件数上限 | 8 份 | `app.py` 中的 `MAX_FILES` | 后端兜底，前端同步限制 |
 | OCR 页数上限 | 30 页 | `cls/ocr.py` 中的 `OCR_MAX_PAGES` | 单个扫描件 PDF |
 | 抽取字段 | 16 个 | `cls/extraction.py` 中的 `FIELD_SPEC` 项数 | 字段清单，不是每条合同都能抽全 |
 | 示例命中 | 18 条（高 2 / 中 8 / 低 8） | 审阅 `samples/软件开发服务合同.txt` | 示例合同与当前规则版本的结果，规则调整后会变化 |
-| 示例 PDF | 8 页 | 同一结果经 `cls/reporting.py` 的 `build_pdf` 导出 | 示例合同导出结果，页数随字体与内容变化 |
+| 示例 PDF | 11 页 | 同一结果经 `cls/reporting.py` 的 `build_pdf` 导出 | 示例合同导出结果，页数随字体与内容变化 |
 | 示例 DOCX 批注 | 16 条 | 同一结果经 `build_docx` 导出，统计 `word/comments.xml` | 18 条命中中 2 条为缺失类判定，没有原文证据句，不生成批注 |
 
 ## 许可与第三方声明

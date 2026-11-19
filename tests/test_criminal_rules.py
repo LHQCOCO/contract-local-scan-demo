@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from cls.kb import KB
-from cls.revisions import REVISIONS
+from cls.revisions import build_revision
 from cls.risks import RULES, evaluate
 
 BAD = """采购合同
@@ -72,11 +72,11 @@ def test_prohibition_clauses_do_not_misfire():
     assert not ({"X03", "X04"} & _ids(findings))
 
 
-def test_new_rules_have_revisions_and_valid_basis():
+def test_new_rules_have_valid_basis():
     for rid in sorted(X_NEW):
-        assert rid in REVISIONS, f"{rid} 缺少修订草案"
         rule = next(r for r in RULES if r["id"] == rid)
-        for bid in rule.get("basis", []):
+        assert rule.get("basis"), f"{rid} 缺少法条依据"
+        for bid in rule["basis"]:
             assert bid in KB.by_id, f"{rid} 引用的法条 {bid} 不在知识库"
 
 
@@ -167,14 +167,16 @@ def test_legitimate_commission_does_not_fire_x04(text):
 
 # ---------- 草案质量规范 ----------
 
-def test_x_revisions_meet_conventions():
+def test_x_revisions_are_traceable_article_text():
     for rid in sorted(X_NEW):
-        rev = REVISIONS.get(rid, "")
-        assert len(rev) >= 20, f"{rid} 草案过短（{len(rev)} 字符）"
-        assert rev.endswith(("。", "；")), f"{rid} 草案应以句号或分号结尾"
-        assert "____" in rev, f"{rid} 草案应包含 ____ 占位符"
-        assert "{" not in rev, f"{rid} 草案不应包含未处理的占位符"
-        assert "TODO" not in rev, f"{rid} 草案不应包含 TODO"
+        rule = next(r for r in RULES if r["id"] == rid)
+        basis = [KB.by_id[bid] for bid in rule["basis"]]
+        rev = build_revision(basis)
+        assert rev, f"{rid} 的修订要点为空"
+        assert "____" not in rev, f"{rid} 的修订要点残留占位符"
+        assert "定期迭代更新" not in rev, f"{rid} 的修订要点仍是模板句"
+        for art in basis:
+            assert f"《{art['law']}》{art['label']}" in rev, f"{rid} 未标注条文出处"
 
 
 # ---------- match 规则命中证据 ----------

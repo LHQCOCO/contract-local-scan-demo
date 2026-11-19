@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 
 from .kb import KB
-from .revisions import REVISIONS
+from .revisions import build_revision
 
 SEVERITY = {
     "high": ("高风险", 16),
@@ -25,7 +25,6 @@ class Finding:
     advice: str
     basis_ids: list
     confidence: float
-    revision: str = ""
     source: dict | None = None   # {"type": "builtin"} 或 {"type": "custom", "pack_name": ...}
     related: list | None = None  # 与内置规则同条款关联（如 C- 规则 related=["R04"]）
 
@@ -52,7 +51,7 @@ class Finding:
             "evidence": self.evidence or "—（合同中未见相关条款）",
             "analysis": self.analysis,
             "advice": self.advice,
-            "revision": self.revision,
+            "revision": build_revision(basis),
             "basis": basis,
             "confidence": self.confidence,
             "source": self.source or {"type": "builtin"},
@@ -1150,7 +1149,7 @@ RULES: list[dict] = [
          markers=["冷静期", "一定期限.{0,4}单方解除", "单方解除.{0,4}合同"],
          basis=["l11f8b93a-12"],
          analysis="未约定被特许人的单方解除期限；依商业特许经营管理条例第十二条，特许经营合同应当约定被特许人在合同订立后一定期限内可以单方解除合同。",
-         advice="增加冷静期条款：自合同签订后____日内被特许人可书面单方解除，已发生费用的结算方式一并写明。"),
+         advice="增加冷静期条款：明确约定被特许人可书面单方解除的期限（自合同签订之日起算），已发生费用的结算方式一并写明。"),
     dict(id="B03", title="加盟费/保证金退还条件缺失", category="经营服务", severity="medium", mode="absence",
          only_types=["特许经营合同"], industry="business",
          markers=["(?:保证金|加盟费|押金).{0,8}(?:退还|返还)", "退还.{0,4}(?:保证金|加盟费|押金)"],
@@ -1192,7 +1191,7 @@ RULES: list[dict] = [
          markers=["终止后.{0,6}(?:交接|移交|返还|删除)", "(?:合同|协议)终止.{0,4}(?:交接|移交)", "客户.{0,2}(?:资料|数据).{0,4}(?:移交|返还|删除|销毁)"],
          basis=["mfd-558"],
          analysis="未见合同终止后的交接安排；依民法典第五百五十八条，合同终止后当事人应依诚信原则履行通知、协助、保密、旧物回收等后合同义务。",
-         advice="约定终止后____日内完成客户资料、账号权限、库存物料的交接或删除，并签署交接确认书。"),
+         advice="约定终止后的交接期限（明确天数与起算日），在该期限内完成客户资料、账号权限、库存物料的交接或删除，并签署交接确认书。"),
     # ============================================================
     # —— SaaS 云服务合同（SAAS 前缀）——
     # ============================================================
@@ -1207,7 +1206,7 @@ RULES: list[dict] = [
          markers=["(?:数据|业务数据|客户数据).{0,4}(?:导出|下载|迁移)", "终止后.{0,4}(?:删除|清除|销毁)", "数据.{0,2}可移植"],
          basis=["mfd-510", "mfd-651"],
          analysis="未见用户数据导出或合同终止后的数据删除/销毁义务。依《个人信息保护法》，个人信息处理者应提供可移植性机制；合同终止后继续留存数据构成侵权。",
-         advice="约定终止后 __ 日内以机器可读格式（CSV/JSON/API）导出全部用户数据，并在导出完成后 __ 日内从生产与备份系统彻底删除；删除完成后提供书面确认。"),
+         advice="约定终止后在约定期限内以机器可读格式（CSV/JSON/API）导出全部用户数据，并在导出完成后按约定期限从生产与备份系统彻底删除；删除完成后提供书面确认。"),
     dict(id="SAAS03", title="强制升级/变更通知期过短或无", category="云服务", severity="medium", mode="absence",
          only_types=["SaaS云服务合同"], industry="saas",
          markers=["(?:版本|功能|API|服务).{0,2}(?:变更|升级|下架|下线).{0,4}(?:通知|提前)", "提前.{0,4}(?:天|日).{0,2}(?:通知|告知)"],
@@ -1314,7 +1313,7 @@ RULES: list[dict] = [
          markers=["(?:偏见|bias|歧视|公平|反歧视|算法.{0,2}歧视).{0,4}(?:测试|评估|审计|治理|责任)", "(?:有害|违规|违法|不当).{0,4}输出.{0,4}(?:责任|赔偿|补偿)"],
          basis=["mfd-651"],
          analysis="AI 模型产生种族/性别/地域歧视性输出或有害内容时，依《生成式人工智能服务管理暂行办法》与《个人信息保护法》，提供者应承担相应行政与民事责任；合同中未约定责任划分可能导致全部风险由甲方承担。",
-         advice="约定：① 服务商须完成算法公平性评测并提供报告；② 服务商对模型输出的违法/有害内容承担首要责任并建立实时过滤机制；③ 争议场景下的数据留存与根因分析义务；④ 责任上限不低于年度服务费的 __ 倍。"),
+         advice="约定：① 服务商须完成算法公平性评测并提供报告；② 服务商对模型输出的违法/有害内容承担首要责任并建立实时过滤机制；③ 争议场景下的数据留存与根因分析义务；④ 责任上限不低于年度服务费的约定倍数，并写明计算口径。"),
     dict(id="AMS03", title="可解释性/审计权缺失", category="AI合规", severity="medium", mode="absence",
          only_types=["AI模型服务合同"], industry="ai",
          markers=["(?:可解释|解释性|explainability|审计.{0,4}(?:权|能力|机制)|可追溯|traceability)", "(?:模型.{0,2}版本|版本.{0,2}控制|model.{0,2}version).{0,4}(?:披露|告知|通知)"],
@@ -1655,7 +1654,6 @@ def evaluate(text: str, values: dict, ctype: str, params: dict | None = None,
             severity=rule["severity"], evidence=ev, analysis=rule["analysis"],
             advice=rule["advice"], basis_ids=rule["basis"],
             confidence=0.9 if mode == "match" else 0.82,
-            revision=REVISIONS.get(rule["id"], ""),
             source=({"type": "custom", "pack_name": rule.get("pack_name", "")}
                     if is_custom else {"type": "builtin"}),
             related=list(rule.get("related") or []),

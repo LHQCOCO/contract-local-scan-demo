@@ -18,7 +18,7 @@ index 5f609bb..fec4dd9 100644
  2. **CISG《联合国国际货物销售合同公约》**
     - 来源：UNCITRAL 官方英文文本；版权归联合国所有，此处复制仅作检索参考
 diff --git a/tests/conftest.py b/tests/conftest.py
-index c4d8f16..256cf4c 100644
+index 9cdd3ed..7e15a51 100644
 --- a/tests/conftest.py
 +++ b/tests/conftest.py
 @@ -11,15 +11,6 @@ if str(ROOT) not in sys.path:

@@ -1,4 +1,4 @@
-"""build_pdf / build_xlsx：修订建议进入导出件的测试。"""
+"""build_pdf / build_xlsx：修订要点进入导出件的测试。"""
 from __future__ import annotations
 
 import io
@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from cls import reporting
+from cls.revisions import REVISION_HEAD
 
 
 def _pdf_text(data: bytes) -> str:
@@ -61,7 +62,7 @@ def test_pdf_contains_revision_section(sample_result):
     assert data.startswith(b"%PDF")
     text = _pdf_text(data)
     revision = sample_result["findings"][0]["revision"]
-    assert "条款修订建议" in text
+    assert REVISION_HEAD in text
     assert revision[:20] in text
 
 
@@ -69,7 +70,7 @@ def test_pdf_skips_revision_line_when_absent(sample_result):
     result = {**sample_result, "findings": [sample_result["findings"][3]]}
     data = reporting.build_pdf(result)
     assert data.startswith(b"%PDF")
-    assert "条款修订建议" not in _pdf_text(data)
+    assert REVISION_HEAD not in _pdf_text(data)
 
 
 def test_pdf_marks_missing_clause(sample_result):
@@ -104,11 +105,11 @@ def test_xlsx_has_revision_column(sample_result):
     wb = load_workbook(io.BytesIO(reporting.build_xlsx(sample_result)))
     ws = wb["风险清单"]
     headers = [c.value for c in ws[1]]
-    assert "条款修订建议" in headers
-    col = headers.index("条款修订建议") + 1
+    assert REVISION_HEAD in headers
+    col = headers.index(REVISION_HEAD) + 1
     assert ws.cell(row=2, column=col).value == sample_result["findings"][0]["revision"]
     assert ws.cell(row=3, column=col).value == sample_result["findings"][1]["revision"]
-    # 无修订草案的风险留空，不应写入占位文本
+    # 无修订要点的风险留空，不应写入占位文本
     assert ws.cell(row=5, column=col).value in (None, "")
 
 

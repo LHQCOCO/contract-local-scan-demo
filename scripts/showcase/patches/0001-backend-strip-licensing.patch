@@ -1,14 +1,18 @@
 diff --git a/app.py b/app.py
-index d36cc23..5e69016 100644
+index e69b84d..3148d74 100644
 --- a/app.py
 +++ b/app.py
-@@ -249,13 +249,10 @@ if __name__ == "__main__":
+@@ -249,7 +249,7 @@ if __name__ == "__main__":
  
  from flask import Flask, jsonify, render_template, request, send_file
  
 -from cls import config, custom, extraction, license as lic, llm, netguard, parsing, reporting, risks, store
 +from cls import config, custom, extraction, llm, netguard, parsing, reporting, risks, store
  from cls.kb import KB, warmup
+ from cls.scenarios import CONTRACT_SCENARIO
+ from cls.scenarios.contract.documents import DOCS as AGENT_DOCS
+@@ -257,9 +257,6 @@ from cls.scenarios.jobsearch.web import jobsearch_bp
+ from cls.scenarios.kbqa.web import kbqa_bp
  
  netguard.install()  # 运行期外联自检：记录并拦截任何指向本机之外的连接
 -# 兑换码走云端换授权码，只发送兑换码与本机机器码；单独登记该域名，
@@ -17,7 +21,7 @@ index d36cc23..5e69016 100644
  
  if config.FROZEN:
      app = Flask(__name__,
-@@ -619,41 +616,6 @@ def api_netguard():
+@@ -727,41 +724,6 @@ def api_netguard():
      return jsonify(netguard.snapshot())
  
  
@@ -59,7 +63,7 @@ index d36cc23..5e69016 100644
  @app.post("/api/netguard/lockdown")
  def api_netguard_lockdown():
      payload = _json_dict()
-@@ -706,14 +668,6 @@ def api_netguard_check():
+@@ -814,14 +776,6 @@ def api_netguard_check():
          else "未锁定：仅拦截非本机目标，127.0.0.1 回环正常放行。",
      })
  
@@ -74,24 +78,48 @@ index d36cc23..5e69016 100644
      levels = [i["level"] for i in items]
      verdict = "alert" if "alert" in levels else ("warn" if "warn" in levels else "ok")
      return jsonify({
-@@ -756,16 +710,6 @@ def api_review():
-             return jsonify({"error": f"{name}：超过 25 MB 限制"}), 400
-         payload.append((name, data))
+@@ -866,18 +820,6 @@ def _review_payload():
+     return payload, use_llm, None
  
--    # 离线授权门槛：未激活不允许审阅，激活后不再有任何次数限制
+ 
+-def _license_gate():
+-    """离线授权门槛：未激活不允许审阅，激活后不再有任何次数限制。"""
 -    lic_state = lic.state()
--    dev = lic.is_dev_mode()
--    if not lic_state["can_review"] and not dev:
+-    if not lic_state["can_review"] and not lic.is_dev_mode():
 -        return jsonify({
 -            "error": lic_state["message"],
 -            "license": lic_state,
 -            "need_license": True,
 -        }), 402
+-    return None
 -
-     job_id = uuid.uuid4().hex[:12]
-     with JOBS_LOCK:
-         JOBS[job_id] = {
-@@ -1001,23 +945,8 @@ def _save_export_to_disk(data: bytes, filename: str) -> tuple[bool, str, str | N
+-
+ @app.post("/api/agent/review")
+ def api_agent_review():
+     """Agent 审阅入口：默认关闭，需 config 里 agent.enabled=true。
+@@ -893,9 +835,6 @@ def api_agent_review():
+     payload, use_llm, bad = _review_payload()
+     if bad:
+         return bad
+-    gate = _license_gate()
+-    if gate:
+-        return gate
+     return _start_agent_job(payload, use_llm)
+ 
+ 
+@@ -906,11 +845,6 @@ def api_review():
+     if bad:
+         return bad
+ 
+-    # 离线授权门槛：未激活不允许审阅，激活后不再有任何次数限制
+-    gate = _license_gate()
+-    if gate:
+-        return gate
+-
+     # mode 缺省必须等价于原有 rule 路径；agent 为显式可选分支
+     mode = (request.form.get("mode") or request.args.get("mode") or "rule").strip().lower()
+     if mode not in {"rule", "agent"}:
+@@ -1172,23 +1106,8 @@ def _save_export_to_disk(data: bytes, filename: str) -> tuple[bool, str, str | N
      return True, "ok", str(path)
  
  
@@ -115,7 +143,7 @@ index d36cc23..5e69016 100644
      r = store.get_review(rid)
      if not r:
          return jsonify({"error": "记录不存在"}), 404
-@@ -1033,9 +962,6 @@ def api_export_pdf(rid):
+@@ -1204,9 +1123,6 @@ def api_export_pdf(rid):
  
  @app.get("/api/reviews/<rid>/xlsx")
  def api_export_xlsx(rid):
@@ -125,7 +153,7 @@ index d36cc23..5e69016 100644
      r = store.get_review(rid)
      if not r:
          return jsonify({"error": "记录不存在"}), 404
-@@ -1053,9 +979,6 @@ def api_export_xlsx(rid):
+@@ -1224,9 +1140,6 @@ def api_export_xlsx(rid):
  
  @app.get("/api/reviews/<rid>/docx")
  def api_export_docx(rid):
@@ -135,7 +163,7 @@ index d36cc23..5e69016 100644
      r = store.get_review(rid)
      if not r:
          return jsonify({"error": "记录不存在"}), 404
-@@ -1523,23 +1446,16 @@ def _read_doc(name: str) -> str:
+@@ -1694,23 +1607,16 @@ def _read_doc(name: str) -> str:
      return _doc_cache[name]
  
  
@@ -162,7 +190,7 @@ index d36cc23..5e69016 100644
  
  @app.get("/api/notices")
 diff --git a/cls/config.py b/cls/config.py
-index 55bd834..8c24e17 100644
+index a28a47c..662b214 100644
 --- a/cls/config.py
 +++ b/cls/config.py
 @@ -10,7 +10,7 @@ from pathlib import Path
@@ -291,7 +319,7 @@ index c5ce99c..6fdf385 100644
              "lockdown": _STATE["lockdown"],
              "locked_at": _STATE["locked_at"],
 diff --git a/cls/risks.py b/cls/risks.py
-index d757fb6..51a712c 100644
+index fd24e3a..6ad7d91 100644
 --- a/cls/risks.py
 +++ b/cls/risks.py
 @@ -1,4 +1,4 @@

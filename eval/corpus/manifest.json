@@ -1,0 +1,77 @@
+{
+  "retrieved_at": "2026-11-18T18:05:00+08:00",
+  "documents": [
+    {
+      "file": "sources/农副产品买卖合同.txt",
+      "title": "农副产品买卖合同（示范文本）GF—2025—0151",
+      "issuer": "国家市场监督管理总局",
+      "url": "https://htsfwb.samr.gov.cn/View?id=8ed1cb2d-568e-41da-b4f3-4b1671c51af4",
+      "contract_type": "采购合同",
+      "chars": 5785,
+      "sha256": "2844f92c2e55f26aecdd7eaf47442e91539f798b2ef94179d04a624862a51a8d"
+    },
+    {
+      "file": "sources/二手车买卖合同.txt",
+      "title": "二手车买卖合同（示范文本）",
+      "issuer": "国家工商行政管理总局",
+      "url": "https://htsfwb.samr.gov.cn/View?id=f6868a15-9a55-47c4-a221-29cc6e49fca7",
+      "contract_type": "采购合同",
+      "chars": 6281,
+      "sha256": "69689e100c4a5ef801ebfd22a4cbb9e21ac1204b6caa8214d7de79df77655007"
+    },
+    {
+      "file": "sources/城镇房屋租赁合同.txt",
+      "title": "城镇房屋租赁合同（示范文本）",
+      "issuer": "国家市场监督管理总局",
+      "url": "https://htsfwb.samr.gov.cn/View?id=2340996b-882d-47a4-b74d-c30784628737",
+      "contract_type": "租赁合同",
+      "chars": 10282,
+      "sha256": "9e4d44ab1a50874aea6570cf0c95df2efc5699f8ab686ec4a121837fd095d3ac"
+    },
+    {
+      "file": "sources/房屋租赁合同.txt",
+      "title": "房屋租赁合同（示范文本）",
+      "issuer": "国家市场监督管理总局",
+      "url": "https://htsfwb.samr.gov.cn/View?id=b914dd8a-0cd6-4c84-a93a-337b32ae1082",
+      "contract_type": "租赁合同",
+      "chars": 8583,
+      "sha256": "80d1396c562c9860477e3f196582dea3cc257207a1ed03677d34ff9ff18b5bdc"
+    },
+    {
+      "file": "sources/数据委托处理服务合同.txt",
+      "title": "数据委托处理服务合同（示范文本）GF—2025—2616",
+      "issuer": "国家数据局、国家市场监督管理总局",
+      "url": "https://htsfwb.samr.gov.cn/View?id=6cdbe704-5a82-4dfe-822f-8cbb60528321",
+      "contract_type": "服务合同",
+      "chars": 9196,
+      "sha256": "d275f091dee3efbcc236f4489fcc7d1d327f04f7f776f2df74bfdc88ccf34199"
+    },
+    {
+      "file": "sources/委托合同.txt",
+      "title": "委托合同（示范文本）GF—2025—1001",
+      "issuer": "国家市场监督管理总局",
+      "url": "https://htsfwb.samr.gov.cn/View?id=50b57729-0fca-45d2-92c3-fe7e6a989815",
+      "contract_type": "其他合同",
+      "chars": 6095,
+      "sha256": "311f35bfc93ee2c625f22d149ca9e155854377cb0c1149bc1418ac3e1f6ce04d"
+    },
+    {
+      "file": "sources/劳动合同通用.txt",
+      "title": "劳动合同（通用）示范文本",
+      "issuer": "人力资源和社会保障部",
+      "url": "https://www.longnan.gov.cn/zfxxgk/public/content/147883303",
+      "contract_type": "劳动合同",
+      "chars": 3147,
+      "sha256": "e9e5e8586a056bc0d5e09034b4d909de9afa25700ba68a14f2644eb31a241062"
+    },
+    {
+      "file": "sources/商业秘密保密协议.txt",
+      "title": "商业秘密保密协议（示范文本）",
+      "issuer": "白银市市场监督管理局",
+      "url": "https://www.baiyin.gov.cn/sscjdglj/zfxxgk/fdzdgknr/lzyj/fldyfbzdjz/art/2023/art_aba733fe98cf4f838e44b7d26ad978fd.html",
+      "contract_type": "保密协议",
+      "chars": 4763,
+      "sha256": "ad234cb6b4baa5a16629bea3da1f888f4f30044068adbb60fde2033752e975d9"
+    }
+  ]
+}

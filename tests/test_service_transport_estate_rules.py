@@ -5,7 +5,6 @@ import pytest
 
 from cls.extraction import detect_type
 from cls.kb import KB
-from cls.revisions import REVISIONS
 from cls.risks import RULES, evaluate
 
 SVC_BAD = """服务合同
@@ -208,11 +207,11 @@ def test_detect_type_recognition(text, expect):
 
 # ---------- 结构与法条 ----------
 
-def test_new_rules_have_revisions_and_valid_basis():
+def test_new_rules_have_valid_basis():
     for rid in sorted(S_NEW | Y_NEW | F_NEW | P_NEW):
-        assert rid in REVISIONS, f"{rid} 缺少修订草案"
         rule = next(r for r in RULES if r["id"] == rid)
-        for bid in rule.get("basis", []):
+        assert rule.get("basis"), f"{rid} 缺少法条依据"
+        for bid in rule["basis"]:
             assert bid in KB.by_id, f"{rid} 引用的法条 {bid} 不在知识库"
 
 

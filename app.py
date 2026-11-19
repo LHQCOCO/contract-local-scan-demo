@@ -251,6 +251,10 @@ from flask import Flask, jsonify, render_template, request, send_file
 
 from cls import config, custom, extraction, llm, netguard, parsing, reporting, risks, store
 from cls.kb import KB, warmup
+from cls.scenarios import CONTRACT_SCENARIO
+from cls.scenarios.contract.documents import DOCS as AGENT_DOCS
+from cls.scenarios.jobsearch.web import jobsearch_bp
+from cls.scenarios.kbqa.web import kbqa_bp
 
 netguard.install()  # 运行期外联自检：记录并拦截任何指向本机之外的连接
 
@@ -262,6 +266,8 @@ else:
     app = Flask(__name__, static_folder="static", template_folder="templates")
 # 8 份 × 25 MB + 表单余量
 app.config["MAX_CONTENT_LENGTH"] = 205 * 1024 * 1024
+app.register_blueprint(jobsearch_bp)
+app.register_blueprint(kbqa_bp)
 MAX_FILES = 8  # 单次审阅最多 8 份合同（前端 addFiles 同步限制，此处为后端兜底）
 
 # 启动页与工作台已同源同端口，保留 CORS 头是为了兼容从其他 localhost 端口
@@ -481,6 +487,108 @@ def _run_pipeline(filename: str, data: bytes, use_llm: bool, on_step=None) -> di
     return result
 
 
+def _agent_model():
+    """仅在用户已授权且模型可用时返回适配器；否则返回 None，走确定性回退。"""
+    from cls.agent.adapter import OllamaAdapter
+
+    try:
+        st = llm.status()
+        supported, _why = config.model_supported(st.get("model", ""))
+        if st.get("online") and st.get("model_ready") and supported:
+            return OllamaAdapter()
+    except Exception:  # noqa: BLE001 - 模型不可用不应阻塞规则审阅
+        pass
+    return None
+
+
+def _agent_worker(job_id: str, files: list[tuple[str, bytes]], use_llm: bool,
+                  run_ids: list[str]):
+    from cls.agent.runtime import AgentRuntime, config_budget
+
+    with JOBS_LOCK:
+        job = JOBS[job_id]
+        job["state"] = "processing"
+    results, errors = [], []
+    adapter = _agent_model() if use_llm else None
+
+    for idx, (name, data) in enumerate(files):
+        with JOBS_LOCK:
+            job["current"] = idx
+            job["progress"][idx]["state"] = "processing"
+            job["progress"][idx]["step"] = "解析文档结构"
+        try:
+            doc = parsing.parse(name, data)
+            doc_id = AGENT_DOCS.add(
+                doc["text"], name,
+                {"ext": doc.get("ext", ""), "pages": doc.get("pages", 0),
+                 "size": doc.get("size", 0),
+                 "title_guess": doc.get("title_guess", ""),
+                 "scan_suspect": doc.get("scan_suspect", False),
+                 "ocr_used": doc.get("ocr_used", False)},
+            )
+            ctype = extraction.detect_type(doc["text"])
+
+            def observer(event, fields, _idx=idx, _job=job):
+                if event == "step.start":
+                    label = fields.get("tool") or fields.get("role") or "处理中"
+                    with JOBS_LOCK:
+                        _job["progress"][_idx]["step"] = f"Agent：{label}"
+
+            runtime = AgentRuntime(CONTRACT_SCENARIO, adapter=adapter, observer=observer)
+            run = runtime.run({"doc_id": doc_id, "contract_type": ctype,
+                               "export": True, "fmt": "pdf"},
+                              budget=config_budget(), run_id=run_ids[idx],
+                              scopes=("export",))
+            summary = run.artifacts.get("summary", {})
+            results.append({
+                "run_id": run.run_id, "status": run.status,
+                "stop_reason": run.stop_reason, "summary": summary,
+                "metrics": run.metrics,
+                "trace": f"/api/agent/trace/{run.run_id}",
+            })
+            with JOBS_LOCK:
+                job["progress"][idx]["state"] = "done"
+                job["progress"][idx]["step"] = "完成"
+                job["progress"][idx]["score"] = summary.get("score", 0)
+                job["progress"][idx]["level"] = summary.get("level", "")
+                job.setdefault("run_ids", []).append(run.run_id)
+        except Exception as e:  # noqa: BLE001
+            errors.append({"filename": name, "error": str(e)})
+            with JOBS_LOCK:
+                job["progress"][idx]["state"] = "failed"
+                job["progress"][idx]["step"] = str(e)
+            app.logger.exception("Agent 处理失败: %s", name)
+
+    with JOBS_LOCK:
+        job["results"] = results
+        job["errors"] = errors
+        job["state"] = "done" if results else "failed"
+        job["finished_at"] = _now()
+
+
+def _start_agent_job(payload: list[tuple[str, bytes]], use_llm: bool):
+    job_id = uuid.uuid4().hex[:12]
+    # run_id 在入队时生成，接口能立刻返回，trace 路径也随即可预期
+    run_ids = [uuid.uuid4().hex[:12] for _ in payload]
+    with JOBS_LOCK:
+        JOBS[job_id] = {
+            "id": job_id, "state": "queued", "kind": "agent",
+            "created_at": _now(), "use_llm": use_llm,
+            "progress": [{"filename": n, "state": "pending", "step": "等待本地处理"}
+                         for n, _ in payload],
+            "current": 0, "results": [], "errors": [], "run_ids": run_ids,
+        }
+    try:
+        threading.Thread(target=_agent_worker,
+                         args=(job_id, payload, use_llm, run_ids), daemon=True).start()
+    except Exception as e:  # noqa: BLE001
+        with JOBS_LOCK:
+            JOBS.pop(job_id, None)
+        return jsonify({"error": f"无法启动 Agent 任务：{e}"}), 500
+    return jsonify({"job_id": job_id, "run_id": run_ids[0], "run_ids": run_ids,
+                    "count": len(payload), "mode": "agent"}), 202
+
+
 def _job_worker(job_id: str, files: list[tuple[str, bytes]], use_llm: bool):
     """后台逐份审阅。"""
     with JOBS_LOCK:
@@ -687,14 +795,13 @@ def api_ping():
     return jsonify({"app": APP_MARKER, "version": VERSION, "ready": READY.is_set()})
 
 
-@app.post("/api/review")
-def api_review():
-    _purge_jobs()
+def _review_payload():
+    """解析上传文件并做体积/格式校验；返回 (payload, use_llm, 错误响应或 None)。"""
     files = request.files.getlist("files")
     if not files:
-        return jsonify({"error": "请至少选择一份合同文件"}), 400
+        return None, None, (jsonify({"error": "请至少选择一份合同文件"}), 400)
     if len(files) > MAX_FILES:
-        return jsonify({"error": f"单次最多 {MAX_FILES} 份合同"}), 400
+        return None, None, (jsonify({"error": f"单次最多 {MAX_FILES} 份合同"}), 400)
     # 客户端开关只表示意愿；未获部署授权时一律按规则模式执行，避免绕过授权调用本机模型
     use_llm = (request.form.get("use_llm", "false").lower() in {"1", "true", "yes"}
                and _consented())
@@ -703,12 +810,47 @@ def api_review():
         name = f.filename or "未命名"
         data = f.read()
         if not name.lower().endswith(tuple(parsing.SUPPORTED)):
-            return jsonify({"error": f"{name}：仅支持 PDF / DOCX / TXT"}), 400
+            return None, None, (jsonify({"error": f"{name}：仅支持 PDF / DOCX / TXT"}), 400)
         if len(data) == 0:
-            return jsonify({"error": f"{name}：文件为空，请确认文件内容后重新上传"}), 400
+            return None, None, (jsonify(
+                {"error": f"{name}：文件为空，请确认文件内容后重新上传"}), 400)
         if len(data) > parsing.MAX_BYTES:
-            return jsonify({"error": f"{name}：超过 25 MB 限制"}), 400
+            return None, None, (jsonify({"error": f"{name}：超过 25 MB 限制"}), 400)
         payload.append((name, data))
+    return payload, use_llm, None
+
+
+@app.post("/api/agent/review")
+def api_agent_review():
+    """Agent 审阅入口：默认关闭，需 config 里 agent.enabled=true。
+
+    返回 202 + run_id / job_id；进度用 GET /api/jobs/<job_id> 轮询，
+    轨迹用 GET /api/agent/trace/<run_id> 回放。
+    """
+    _purge_jobs()
+    from cls.agent.runtime import agent_enabled
+
+    if not agent_enabled():
+        return jsonify({"error": "Agent 模式未开启（config.agent.enabled=false）"}), 403
+    payload, use_llm, bad = _review_payload()
+    if bad:
+        return bad
+    return _start_agent_job(payload, use_llm)
+
+
+@app.post("/api/review")
+def api_review():
+    _purge_jobs()
+    payload, use_llm, bad = _review_payload()
+    if bad:
+        return bad
+
+    # mode 缺省必须等价于原有 rule 路径；agent 为显式可选分支
+    mode = (request.form.get("mode") or request.args.get("mode") or "rule").strip().lower()
+    if mode not in {"rule", "agent"}:
+        return jsonify({"error": "mode 仅支持 rule / agent"}), 400
+    if mode == "agent":
+        return _start_agent_job(payload, use_llm)
 
     job_id = uuid.uuid4().hex[:12]
     with JOBS_LOCK:
@@ -743,6 +885,25 @@ def api_job(job_id):
     if not snapshot:
         return jsonify({"error": "任务不存在或已过期"}), 404
     return jsonify(snapshot)
+
+
+@app.get("/api/agent/trace/<run_id>")
+def api_agent_trace(run_id):
+    """回放单次 Agent 运行：只含脱敏后的事件，不含合同原文。"""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{4,64}", run_id or ""):
+        return jsonify({"error": "run_id 不合法"}), 400
+    path = config.DATA_DIR / "agent_traces" / f"{run_id}.jsonl"
+    if not path.exists():
+        return jsonify({"error": "trace 不存在或已过期"}), 404
+    events = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                events.append(json.loads(line))
+            except ValueError:
+                continue
+    return jsonify({"run_id": run_id, "count": len(events), "events": events})
 
 
 @app.get("/api/reviews")

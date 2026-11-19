@@ -828,7 +828,7 @@
           ${llmBlock(f)}
           ${f.revision ? `
           <div class="revision">
-            <div class="rev-head"><h5>条款修订建议</h5><button class="copy-btn" data-copy="${esc(f.id)}">复制条款</button></div>
+            <div class="rev-head"><h5>修订要点 · 条文原文，需法务复核</h5><button class="copy-btn" data-copy="${esc(f.id)}">复制要点</button></div>
             <p>${esc(f.revision)}</p>
           </div>` : ''}
           <div class="law-refs"><span>法律依据</span>

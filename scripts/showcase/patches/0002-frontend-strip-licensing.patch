@@ -50,7 +50,7 @@ index 9ac86c7..772e382 100644
  .sidebar{
    position:fixed;top:68px;left:0;bottom:0;width:236px;z-index:50;
 diff --git a/static/app.js b/static/app.js
-index a690f71..15aa964 100644
+index 7af0b7e..d5c303f 100644
 --- a/static/app.js
 +++ b/static/app.js
 @@ -44,7 +44,6 @@
@@ -340,7 +340,7 @@ index e7d5fb4..bfafce9 100644
      try { return !localStorage.getItem(LS_KEY); } catch (_) { return false; }
    }
 diff --git a/templates/index.html b/templates/index.html
-index ba82e3d..79d30f7 100644
+index 1bfffe9..f18a4de 100644
 --- a/templates/index.html
 +++ b/templates/index.html
 @@ -46,9 +46,6 @@

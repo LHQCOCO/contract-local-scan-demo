@@ -79,6 +79,17 @@ DEFAULT_CONFIG = {
     # 企业自定义包接管的阈值来源标记：{参数名: {value, pack_id, pack_name}}
     # 由 cls/custom.py 的 recompute_params 统一维护，界面只读展示
     "threshold_overrides": {},
+    # Agent 运行时：默认关闭，缺省值不参与启动流程
+    "agent": {
+        "enabled": False,
+        "model": "",
+        "budget": {
+            "max_steps": 20,
+            "max_tool_calls": 60,
+            "max_wall_s": 180,
+            "max_tokens": 20000,
+        },
+    },
 }
 
 
@@ -169,12 +180,17 @@ def load_config() -> dict:
         try:
             saved = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             # 嵌套字典做深合并：旧配置文件缺少后增的默认项时，以默认配置补齐
-            nested = {k: saved.pop(k) for k in ("rule_params", "industry_rules", "threshold_overrides") if k in saved}
+            nested = {k: saved.pop(k) for k in ("rule_params", "industry_rules", "threshold_overrides", "agent") if k in saved}
             cfg.update(saved)
             for k, v in nested.items():
                 if isinstance(v, dict):
                     merged = dict(DEFAULT_CONFIG.get(k, {}))
                     merged.update(v)
+                    if k == "agent" and isinstance(v.get("budget"), dict):
+                        # 预算允许只覆盖部分字段，其余沿用默认值
+                        budget = dict(DEFAULT_CONFIG["agent"]["budget"])
+                        budget.update(v["budget"])
+                        merged["budget"] = budget
                     cfg[k] = merged
         except Exception:
             # 配置损坏时备份原始文件再回退默认值，避免下一次保存把用户内容彻底覆盖

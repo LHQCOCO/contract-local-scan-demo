@@ -58,15 +58,15 @@ def sample_result():
     findings = [
         make_finding(
             "R05", "付款期限过长", "high", ANCHORED_EVIDENCE,
-            revision="甲方应在验收合格后30日内支付合同价款的80%，余款于质保期满后支付。",
+            revision="1）《中华人民共和国民法典》第五百零九条：当事人应当按照约定全面履行自己的义务。",
         ),
         make_finding(
             "R08", "验收标准主观", "medium", CROSS_EVIDENCE,
-            revision="验收标准为双方确认的《需求规格说明书》所列可量化指标，甲方应在收到交付物后10个工作日内书面反馈。",
+            revision="1）《中华人民共和国民法典》第五百零九条：当事人应当按照约定全面履行自己的义务。",
         ),
         make_finding(
             "R12", "缺失争议解决条款", "medium", ABSENCE_EVIDENCE,
-            revision="因本合同产生的争议，双方应先行协商；协商不成的，提交乙方所在地人民法院诉讼解决。",
+            revision="1）《中华人民共和国民法典》第五百零九条：当事人应当按照约定全面履行自己的义务。",
         ),
         make_finding("R15", "账期表述模糊", "low", "90日", revision=""),
     ]

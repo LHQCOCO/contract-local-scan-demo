@@ -15,6 +15,8 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Paragraph, NextPageTemplate,
                                 PageBreak, KeepTogether, Spacer, Table, TableStyle, CondPageBreak)
 
+from .revisions import REVISION_HEAD
+
 FONT = "STSong-Light"
 pdfmetrics.registerFont(UnicodeCIDFont(FONT))
 
@@ -242,7 +244,7 @@ def _comment_lines(loc: dict) -> list[str]:
     lines.append(f"风险分析：{f.get('analysis', '')}")
     lines.append(f"修改建议：{f.get('advice', '')}")
     if f.get("revision"):
-        lines.append(f"建议条款：{f['revision']}")
+        lines.append(f"{REVISION_HEAD}：{f['revision']}")
     basis = "；".join(f"{b.get('law', '')}{b.get('label', '')}" for b in (f.get("basis") or []))
     if basis:
         lines.append(f"法律依据：{basis}")
@@ -523,7 +525,7 @@ def _finding_block(i, f, s, lead=None):
     body.append(Paragraph(f"<font color='#8A8377'>风险分析</font>　{_t(f['analysis'])}", s["body"]))
     body.append(Paragraph(f"<font color='#8A8377'>修改建议</font>　{_t(f['advice'])}", s["body"]))
     if f.get("revision"):
-        body.append(Paragraph(f"<font color='#8A8377'>条款修订建议</font>　{_t(f['revision'])}", s["body"]))
+        body.append(Paragraph(f"<font color='#8A8377'>{REVISION_HEAD}</font>　{_t(f['revision'])}", s["body"]))
     if f["basis"]:
         refs = "；".join(f"{b['law']}{b['label']}" for b in f["basis"])
         body.append(Paragraph(f"<font color='#8A8377'>法律依据</font>　{_t(refs)}", s["small"]))
@@ -654,7 +656,7 @@ def build_docx(result: dict) -> bytes:
             cn(t)
             detail = f"修改建议：{f.get('advice', '')}"
             if f.get("revision"):
-                detail += f"\n建议条款：{f['revision']}"
+                detail += f"\n{REVISION_HEAD}：{f['revision']}"
             d = p.add_run(detail)
             d.font.size = Pt(9.5)
             cn(d)
@@ -735,7 +737,7 @@ def build_xlsx(result: dict) -> bytes:
 
     ws3 = wb.create_sheet("风险清单")
     style_sheet(ws3, ["序号", "风险等级", "风险标题", "类别", "条款原文", "条款定位",
-                      "风险分析", "修改建议", "条款修订建议", "法律依据", "处理方式"],
+                      "风险分析", "修改建议", REVISION_HEAD, "法律依据", "处理方式"],
                 [7, 10, 26, 16, 44, 32, 46, 46, 56, 28, 10])
     sev_fill = {
         "高风险": PatternFill("solid", fgColor="A3372F"),

@@ -9,6 +9,7 @@ from docx import Document
 from docx.oxml.ns import qn
 
 from cls import reporting
+from cls.revisions import REVISION_HEAD
 from conftest import ANCHORED_EVIDENCE, CROSS_EVIDENCE
 
 
@@ -42,7 +43,7 @@ def test_docx_comment_carries_advice_and_revision(sample_result):
     assert "【高风险】" in target
     assert "风险分析：" in target
     assert "修改建议：" in target
-    assert "建议条款：" in target
+    assert REVISION_HEAD in target
     assert "法律依据：" in target
     assert sample_result["findings"][0]["revision"] in target
     assert all(c.author == "Contract LocalScan" for c in doc.comments)
@@ -96,7 +97,7 @@ def test_docx_writes_word_comments_part(sample_result):
         assert "word/comments.xml" in zf.namelist()
         xml = zf.read("word/comments.xml").decode("utf-8")
     assert xml.count("<w:comment ") == 4
-    assert "建议条款：" in xml
+    assert REVISION_HEAD in xml
 
 
 def test_docx_without_findings_is_valid(sample_result):
